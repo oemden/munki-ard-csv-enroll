@@ -4,7 +4,7 @@
 ##
 ## oem at oemden dot com
 ##
-version="1.5.6" ## prep for github publishing
+version="1.5.7" ## Option to get csv files fom USB key
 ############################# EDIT START ####################################################
 ## ---------------------------- Jungle Options  -------------------------------------- #
 host_Id_Choice="CN" # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's Manifest in Munki
@@ -21,6 +21,7 @@ AUTH="Authorization: Basic bXVua2k6bXVua2k=" ## Please refer to: https://github.
 ## ---------------------------- CSV FILE(S) Names ------------------------------------ #
 csv_field_SEPARATOR=";" ## Eventually Change to whatever separate field you want
 csv_value_SEPARATOR=" " ## for multiple extra Manifests ( TODO: or catalogs).
+csv_METHOD="HTTP" ## HTTP (csv files are in munki Repo enrolltothejungle) or USB (csv files are in the same folder of the script)
 
 ## ---------------------------- EVENTUALLY edit below -------------------------------- #
 BU_Munki_Hosts_FileName="BU_Munki_Hosts.csv" ## csv file with your computers infos
@@ -81,35 +82,38 @@ BU_CSV_FILES=( "${BU_Munki_Hosts_FileName}" "${BU_Munki_Preferences_FileName}" "
 cmd_defaults="/usr/bin/defaults"
 cmd_PlistBuddy="/usr/libexec/PlistBuddy"
 cmd_scutil="/usr/sbin/scutil"
-cmd_curl="/usr/bin/curl"
+cmd_curl="/usr/bin/HTTP"
 cmd_echo="/bin/echo"
 cmd_touch="/usr/bin/touch"
+cmd_touch="/usr/bin/touch"
+cmd_cp="/bin/cp"
 
 #################################### prepare stuff ##########################################  
 function UrlCheck() {
  # check url is reachable
-  "${cmd_curl}" -H "${AUTH}" -Is "${1}" | head -n 1 | awk '{print $3}' | grep "OK"
+   "${cmd_curl}" -H "${AUTH}" -Is "${1}" | head -n 1 | awk '{print $3}' | grep "OK"
+  fi
 }
 
 function UrlsAvailability {
  echo " ------------------------------------------------------------------------"
  ## is munki_repo reachable ?
- munki_url_check=$( UrlCheck "${MUNKI_REPO_URL}" )
- if [[ "${munki_url_check}" =~ "OK" ]] ; then
-  printf " munki Repo URL: ${MUNKI_REPO_URL} is reachable, \n checking munki enroll URL\n"
-   munkienroll_url_check=$( UrlCheck "${MUNKI_ENROLL_URL}" )
-    if [[ "${munkienroll_url_check}" =~ "OK" ]] ; then
-     echo " munki ENROLL URL ${MUNKI_ENROLL_URL} is reachable, we can go on"
-    else
-     echo " munki ENROLL URL is NOT reachable"
-     echo " please check your settings, exiting"
-     exit 1
-    fi
- else
-     echo " munki REPO URL is NOT reachable"
-     echo " please check your settings, exiting"
-     exit 1
- fi
+  munki_url_check=$( UrlCheck "${MUNKI_REPO_URL}" )
+   if [[ "${munki_url_check}" =~ "OK" ]] ; then
+    printf " munki Repo URL: ${MUNKI_REPO_URL} is reachable, \n checking munki enroll URL\n"
+    munkienroll_url_check=$( UrlCheck "${MUNKI_ENROLL_URL}" )
+      if [[ "${munkienroll_url_check}" =~ "OK" ]] ; then
+       echo " munki ENROLL URL ${MUNKI_ENROLL_URL} is reachable, we can go on"
+      else
+       echo " munki ENROLL URL is NOT reachable"
+       echo " please check your settings, exiting"
+       exit 1
+      fi
+   else
+      echo " munki REPO URL is NOT reachable"
+      echo " please check your settings, exiting"
+      exit 1
+   fi
   cmd_echoDebug " ------------------------------------------------------------------------"
 }
 
@@ -121,7 +125,11 @@ function PrepareWorkingDirectory {
 function GetCsvFiles {
  for csv in "${BU_CSV_FILES[@]}"
   do
-   "${cmd_curl}" -H "${AUTH}" -s --fail "${MUNKI_ENROLL_DIR}/${csv}" --output "${WorkingDirectory}/${csv}"
+  if [[ "${csv_METHOD}" == "CURL" ]] ; then
+   	"${cmd_curl}" -H "${AUTH}" -s --fail "${MUNKI_ENROLL_DIR}/${csv}" --output "${WorkingDirectory}/${csv}"
+  elif [[ "${csv_METHOD}" == "USB" ]] ; then
+    cp "/Volumes/bootstrap/csv/${csv}" "${WorkingDirectory}/${csv}"
+  fi
   done
 }
 
@@ -525,7 +533,7 @@ function CheckIfHostManifestExistOnMunkiRepo {
 function UploadHostManifest {
  echo " ------------------------------------------------------------------------"
  echo " Uploading host Manifest to munki_repo"
- curl_fn="uploaded_file=@${munki_host_manifest}" ## stupid trick to get curl upload working with below command 
+ curl_fn="uploaded_file=@${munki_host_manifest}" ## stupid trick to get HTTP upload working with below command 
  "${cmd_curl}" -H "${AUTH}" -F "$curl_fn" -F hostdir="${MunkiRepoHostSubDir}" -F version="${version}" "${MUNKI_ENROLL_URL}" 
 }
 
@@ -573,5 +581,5 @@ exit 0
 ## Remove some Jungle Options: aka if munkireport or sal url are found, then equals option is set. DONE.
 ## Deal with Target $3 for pkg or $1 for bootstrappr or standalone script. DONE
 ## Inject the Hosts subdirectory as a variable in the php file. DONE
-## Add options LOCAL vs CURL. TODO
+## Add options LOCAL vs HTTP. TODO
 #############################################################################################  
