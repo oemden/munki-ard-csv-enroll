@@ -4,7 +4,7 @@
 ##
 ## oem at oemden dot com
 ##
-version="1.5.7" ## Option to get csv files fom USB key
+version="1.5.7.1" ## Option to get csv files fom USB key
 ############################# EDIT START ####################################################
 ## ---------------------------- Jungle Options  -------------------------------------- #
 host_Id_Choice="CN" # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's Manifest in Munki
@@ -82,7 +82,7 @@ BU_CSV_FILES=( "${BU_Munki_Hosts_FileName}" "${BU_Munki_Preferences_FileName}" "
 cmd_defaults="/usr/bin/defaults"
 cmd_PlistBuddy="/usr/libexec/PlistBuddy"
 cmd_scutil="/usr/sbin/scutil"
-cmd_curl="/usr/bin/HTTP"
+cmd_curl="/usr/bin/curl"
 cmd_echo="/bin/echo"
 cmd_touch="/usr/bin/touch"
 cmd_touch="/usr/bin/touch"
@@ -91,29 +91,28 @@ cmd_cp="/bin/cp"
 #################################### prepare stuff ##########################################  
 function UrlCheck() {
  # check url is reachable
-   "${cmd_curl}" -H "${AUTH}" -Is "${1}" | head -n 1 | awk '{print $3}' | grep "OK"
-  fi
+  "${cmd_curl}" -H "${AUTH}" -Is "${1}" | head -n 1 | awk '{print $3}' | grep "OK"
 }
 
 function UrlsAvailability {
  echo " ------------------------------------------------------------------------"
  ## is munki_repo reachable ?
-  munki_url_check=$( UrlCheck "${MUNKI_REPO_URL}" )
-   if [[ "${munki_url_check}" =~ "OK" ]] ; then
-    printf " munki Repo URL: ${MUNKI_REPO_URL} is reachable, \n checking munki enroll URL\n"
-    munkienroll_url_check=$( UrlCheck "${MUNKI_ENROLL_URL}" )
-      if [[ "${munkienroll_url_check}" =~ "OK" ]] ; then
-       echo " munki ENROLL URL ${MUNKI_ENROLL_URL} is reachable, we can go on"
-      else
-       echo " munki ENROLL URL is NOT reachable"
-       echo " please check your settings, exiting"
-       exit 1
-      fi
-   else
-      echo " munki REPO URL is NOT reachable"
-      echo " please check your settings, exiting"
-      exit 1
-   fi
+ munki_url_check=$( UrlCheck "${MUNKI_REPO_URL}" )
+ if [[ "${munki_url_check}" =~ "OK" ]] ; then
+  printf " munki Repo URL: ${MUNKI_REPO_URL} is reachable, \n checking munki enroll URL\n"
+   munkienroll_url_check=$( UrlCheck "${MUNKI_ENROLL_URL}" )
+    if [[ "${munkienroll_url_check}" =~ "OK" ]] ; then
+     echo " munki ENROLL URL ${MUNKI_ENROLL_URL} is reachable, we can go on"
+    else
+     echo " munki ENROLL URL is NOT reachable"
+     echo " please check your settings, exiting"
+     exit 1
+    fi
+ else
+     echo " munki REPO URL is NOT reachable"
+     echo " please check your settings, exiting"
+     exit 1
+ fi
   cmd_echoDebug " ------------------------------------------------------------------------"
 }
 
@@ -533,7 +532,7 @@ function CheckIfHostManifestExistOnMunkiRepo {
 function UploadHostManifest {
  echo " ------------------------------------------------------------------------"
  echo " Uploading host Manifest to munki_repo"
- curl_fn="uploaded_file=@${munki_host_manifest}" ## stupid trick to get HTTP upload working with below command 
+ curl_fn="uploaded_file=@${munki_host_manifest}" ## stupid trick to get curl upload working with below command 
  "${cmd_curl}" -H "${AUTH}" -F "$curl_fn" -F hostdir="${MunkiRepoHostSubDir}" -F version="${version}" "${MUNKI_ENROLL_URL}" 
 }
 
@@ -581,5 +580,5 @@ exit 0
 ## Remove some Jungle Options: aka if munkireport or sal url are found, then equals option is set. DONE.
 ## Deal with Target $3 for pkg or $1 for bootstrappr or standalone script. DONE
 ## Inject the Hosts subdirectory as a variable in the php file. DONE
-## Add options LOCAL vs HTTP. TODO
+## Add options LOCAL vs CURL
 #############################################################################################  
