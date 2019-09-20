@@ -21,7 +21,8 @@ AUTH="Authorization: Basic bXVua2k6bXVua2k=" ## Please refer to: https://github.
 ## ---------------------------- CSV FILE(S) Names ------------------------------------ #
 csv_field_SEPARATOR=";" ## Eventually Change to whatever separate field you want
 csv_value_SEPARATOR=" " ## for multiple extra Manifests ( TODO: or catalogs).
-csv_METHOD="HTTP" ## HTTP (csv files are in munki Repo enrolltothejungle) or USB (csv files are in the same folder of the script)
+csv_METHOD="HTTP" ## HTTP(s) (csv files are in munki Repo enrolltothejungle) or USB (csv files must be in csv folder on the same volume as bootstrappr (for now) /Volumes/bootstrap/csv/)
+USB_Volume="bootstrap" ## IMPORTANT!: csv files must be located in a csv folder at the root of the Volume
 
 ## ---------------------------- EVENTUALLY edit below -------------------------------- #
 BU_Munki_Hosts_FileName="BU_Munki_Hosts.csv" ## csv file with your computers infos
@@ -122,12 +123,12 @@ function PrepareWorkingDirectory {
 
 ######################################## CSV PART ###########################################  
 function GetCsvFiles {
- for csv in "${BU_CSV_FILES[@]}"
+ for csv_file in "${BU_CSV_FILES[@]}"
   do
   if [[ "${csv_METHOD}" == "CURL" ]] ; then
-   	"${cmd_curl}" -H "${AUTH}" -s --fail "${MUNKI_ENROLL_DIR}/${csv}" --output "${WorkingDirectory}/${csv}"
+   	"${cmd_curl}" -H "${AUTH}" -s --fail "${MUNKI_ENROLL_DIR}/${csv_file}" --output "${WorkingDirectory}/${csv_file}"
   elif [[ "${csv_METHOD}" == "USB" ]] ; then
-    cp "/Volumes/bootstrap/csv/${csv}" "${WorkingDirectory}/${csv}"
+    cp "/Volumes/${USB_Volume}/csv/${csv_file}" "${WorkingDirectory}/${csv_file}"
   fi
   done
 }
@@ -580,5 +581,6 @@ exit 0
 ## Remove some Jungle Options: aka if munkireport or sal url are found, then equals option is set. DONE.
 ## Deal with Target $3 for pkg or $1 for bootstrappr or standalone script. DONE
 ## Inject the Hosts subdirectory as a variable in the php file. DONE
-## Add options LOCAL vs CURL
+## Add options LOCAL vs CURL. ONGOING
+## customize Volume Name in USB case TODO
 #############################################################################################  
