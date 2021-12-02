@@ -1,13 +1,22 @@
 # munki-ard-csv-enroll 
 
-##Enroll computers using csv files and use ARD fields
+##Enroll computers from csv files and using ARD fields
 
 
 This script enrolls computers using csv files to extract host Enrollment options and matches ARD fields of the computer to some infos (included_manifests). Limited to 4 fields as there are only 4 available ARD fields.
 
 The script will also create munki host Manifest file on the Host and then upload it to the munki_repo. Thus being able to use macOs "only" commands `defaults` or `PlistBuddy` and not depend on the server hosting the munki_repo.
 
-it can be runned from ( the munki) bootstrappr as a script, as a postinstall script in a pkg, or directly from a computer.
+it can be runned from ( the munki) bootstrappr as a script, as a postinstall script in a pkg, or directly from a computer and even as a nopkg in munki.
+
+**2021 update**: 
+
+I use this script for quite some time now ( 2019 ) and it works as expected
+
+It works as a "Custom Command" in Mosyle. 
+
+I decided to use it as a post_install script for an Install-PKG of the Munkitools-DEP install within Mosyle. Works super fine and I use for all my (re)enroll-deployments. 
+
 
 **Apple Remote Desktop fields**
 
