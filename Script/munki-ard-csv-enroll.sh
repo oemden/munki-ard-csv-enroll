@@ -4,7 +4,7 @@
 ##
 ## oem at oemden dot com
 ##
-version="1.5.7.2" ## Option to get csv files fom USB key
+version="1.5.7.3" ## Option to get csv files fom USB key
 ############################# EDIT START ####################################################
 ## ---------------------------- Jungle Options  -------------------------------------- #
 host_Id_Choice="CN" # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's Manifest in Munki
@@ -592,6 +592,8 @@ DoIt
 exit 0
 
 ######################################## TODOS ##############################################
+## Options yes or no SAL aka if no CSV don't fail
+## Options reboot or not selon postinstll par ex.
 ## Put munki_bootstrap & reset_manifest Options in BU_Munki_Hosts.csv file. TODO
 ## Check Potential ARD fields conflict between BU & GP - aka if BU = ARD1 GP can not be ARD1. TODO
 ## Backup manifest in the repo. TODO - WARNING script Does not Backup nor Updte Manifest for now.
