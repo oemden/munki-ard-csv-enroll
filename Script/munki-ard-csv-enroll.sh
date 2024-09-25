@@ -1,10 +1,11 @@
 #!/bin/bash
 ## AutoEnroll Computers from CSV file(s) and Using ARD fields - Inspired by : munki-autoenroll-php script
+## Clouflare Warp Version
 /usr/bin/clear 2>/dev/null
 ##
 ## oem at oemden dot com
 ##
-version="1.6" ## avoid empty manifest variable ; adapt curl output for https
+version="1.7" ## Adding Cloudflare Check
 ############################# EDIT START ####################################################
 ## ---------------------------- Jungle Options  -------------------------------------- #
 host_Id_Choice="SN" # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's Manifest in Munki
@@ -17,7 +18,12 @@ DomainName="hq.example.com"
 MUNKI_REPO_URL="http://munki.${DomainName}"
 reset_manifest=0 ## 1 ( if you want ) | 0 ( if you don't want ) to reset the Host Manifest in the Repo | WARNING ! For now script will replace Manifest !
 munki_bootstrap=0 ## If you want to bootstrap munki at first boot. Be carefull and test it.
+reboot_after_enroll=0 # 1 ( if you want ) | 0 ( if you don't want ) to reboot after enrolment #TODO
 AUTH="Authorization: Basic bXVua2k6bXVua2k=" ## Please refer to: https://github.com/munki/munki/wiki/Using-Basic-Authentication
+
+## ------------------------------- Cloudflare ---------------------------------------- #
+check_for_cloudflare=0 # 1 ( if you want ) | 0 ( if you don't want ) to Check Cloudflare Status before running the enrolment
+cf_team_Name="my_cf_team" # Cloudflare team Name
 
 ## ------------------------------- CSV FILE(S) --------------------------------------- #
 csv_field_SEPARATOR=";" ## Eventually Change to whatever separate field you want
@@ -40,7 +46,6 @@ echoDebug=0 # print extra feedback if set on 1. low feedback if set to 0
 MUNKI_ENROLL_DIR="${MUNKI_REPO_URL}/enrolltothejungle" ## Please Do Read ReadMe file
 #MUNKI_ENROLL_CSVDIR="${MUNKI_REPO_URL}/enrolltothejungle/csv" ## TODO
 MUNKI_ENROLL_URL="${MUNKI_ENROLL_DIR}/index.php" ## Please Do Read ReadMe file
-
 Host_UNIQUE_ID=`ioreg -l | grep IOPlatformSerialNumber | awk '{print $4}' | cut -d \" -f 2` ## for CSV match
 
 ####################################### Welcome ############################################
@@ -69,8 +74,6 @@ fi
 
 ##### WARNING TEST with MDS twocanoes !!!
 
-
-
 ## Setting up Variables depending on the Target
 WorkingDirectory="${TARGET}/private/tmp/enrolltothejungle"
 PreferencesPath="${TARGET}/Library/Preferences"
@@ -92,8 +95,13 @@ cmd_scutil="/usr/sbin/scutil"
 cmd_curl="/usr/bin/curl"
 cmd_echo="/bin/echo"
 cmd_touch="/usr/bin/touch"
-cmd_touch="/usr/bin/touch"
 cmd_cp="/bin/cp"
+
+############################# Warp Addon #####################################################
+app_Name="Cloudflare WARP"
+cf_team_URL="https://${cf_team_Name}.cloudflareaccess.com"
+cmd_warpcli="/usr/local/bin/warp-cli"
+#############################################################################################
 
 #################################### prepare stuff ##########################################
 function UrlCheck() {
@@ -101,7 +109,7 @@ function UrlCheck() {
   "${cmd_curl}" -o /dev/null -H "${AUTH}" -sw "%{http_code}" "${1}" | grep '^[0-9]\+'
 }
 
-function UrlsAvailability {
+function munki_UrlsAvailability {
  echo " ------------------------------------------------------------------------"
  ## is munki_repo reachable ?
  munki_url_check=$( UrlCheck "${MUNKI_REPO_URL}" )
@@ -120,7 +128,7 @@ function UrlsAvailability {
      echo " please check your settings, exiting"
      exit 1
  fi
-  cmd_echoDebug " ------------------------------------------------------------------------"
+  echo_Debug " ------------------------------------------------------------------------"
 }
 
 function PrepareWorkingDirectory {
@@ -148,7 +156,7 @@ function VerifyLocalCSVexist {
   echo " ! Alert ! NO CSV file, exiting"
   exit 1
  else
-   cmd_echoDebug "  - The csv File \"$thefilename\" is here"
+   echo_Debug "  - The csv File \"$thefilename\" is here"
  fi
 }
 
@@ -162,19 +170,19 @@ function GetComputerInfoFromCsv {
  while read csv_HostSerial csv_ComputerName csv_MACAddress csv_host_ARD1 csv_host_ARD2 csv_host_ARD3 csv_host_ARD4 csv_HostDefaultCatalog csv_MunkiHostSubDir csv_Site_default csv_nestedManifests
   do
    if [[ "${csv_HostSerial}" == "${Host_UNIQUE_ID}" ]] ; then ## verify host SerialNumber of host is in the csv file
-     cmd_echoDebug " csv_HostSerial: ${csv_HostSerial} matches Host_UNIQUE_ID: ${Host_UNIQUE_ID}"
+     echo_Debug " csv_HostSerial: ${csv_HostSerial} matches Host_UNIQUE_ID: ${Host_UNIQUE_ID}"
     echo " ------------------------------------------------------------------------"
-     ComputerMatch="1" ; cmd_echoDebug "ComputerMatch" ; cmd_echoDebug
-     hostSerial="${Host_UNIQUE_ID}" ;  cmd_echoDebug "csv_HostSerial: $csv_HostSerial" ## this is the UNIQUE ID of the computer
-     hostComputerName="${csv_ComputerName}" ; cmd_echoDebug "csv_ComputerName: ${csv_ComputerName}" ## this is the ComputerName for the computer
-     hostMACAddress=$(echo "${csv_MACAddress}" | sed 's/://g') ; cmd_echoDebug "csv_MACAddress: ${csv_MACAddress}" ## this is the MAC ADDRESS of the computer
-     host_ARD1="${csv_host_ARD1}" ; cmd_echoDebug "csv_host_ARD1: ${csv_host_ARD1}" ## BU_BusinessUnit
-     host_ARD2="${csv_host_ARD2}" ; cmd_echoDebug "csv_host_ARD2: ${csv_host_ARD2}" ## GP_Group
-     host_ARD3="${csv_host_ARD3}" ; cmd_echoDebug "csv_host_ARD3: ${csv_host_ARD3}" ## KD_KIND
-     host_ARD4="${csv_host_ARD4}" ; cmd_echoDebug "csv_host_ARD4: ${csv_host_ARD4}" ## TP_TYPE
-     HostDefaultCatalog="${csv_HostDefaultCatalog}" ; cmd_echoDebug "csv_HostDefaultCatalog: ${csv_HostDefaultCatalog}" ## this is the default catalog for the computer
-     MunkiRepoHostSubDir="${csv_MunkiHostSubDir}" ; cmd_echoDebug "csv_MunkiHostSubDir: ${csv_MunkiHostSubDir}" ## this is the Hosts Subdir in munki_repo
-     BU_Site_default_manifest="${csv_Site_default}" ; cmd_echoDebug "csv_Site_default: ${csv_Site_default}" ## this is the default manifest for all hosts
+     ComputerMatch="1" ; echo_Debug "ComputerMatch" ; echo_Debug
+     hostSerial="${Host_UNIQUE_ID}" ;  echo_Debug "csv_HostSerial: $csv_HostSerial" ## this is the UNIQUE ID of the computer
+     hostComputerName="${csv_ComputerName}" ; echo_Debug "csv_ComputerName: ${csv_ComputerName}" ## this is the ComputerName for the computer
+     hostMACAddress=$(echo "${csv_MACAddress}" | sed 's/://g') ; echo_Debug "csv_MACAddress: ${csv_MACAddress}" ## this is the MAC ADDRESS of the computer
+     host_ARD1="${csv_host_ARD1}" ; echo_Debug "csv_host_ARD1: ${csv_host_ARD1}" ## BU_BusinessUnit
+     host_ARD2="${csv_host_ARD2}" ; echo_Debug "csv_host_ARD2: ${csv_host_ARD2}" ## GP_Group
+     host_ARD3="${csv_host_ARD3}" ; echo_Debug "csv_host_ARD3: ${csv_host_ARD3}" ## KD_KIND
+     host_ARD4="${csv_host_ARD4}" ; echo_Debug "csv_host_ARD4: ${csv_host_ARD4}" ## TP_TYPE
+     HostDefaultCatalog="${csv_HostDefaultCatalog}" ; echo_Debug "csv_HostDefaultCatalog: ${csv_HostDefaultCatalog}" ## this is the default catalog for the computer
+     MunkiRepoHostSubDir="${csv_MunkiHostSubDir}" ; echo_Debug "csv_MunkiHostSubDir: ${csv_MunkiHostSubDir}" ## this is the Hosts Subdir in munki_repo
+     BU_Site_default_manifest="${csv_Site_default}" ; echo_Debug "csv_Site_default: ${csv_Site_default}" ## this is the default manifest for all hosts
 
      ## Get BU Master ARD field Choice for sal & and munkiReport keys
      if [[ "${BU_ARD_Choice}" == "ARD1" ]] ; then
@@ -230,7 +238,7 @@ function GetComputerInfoFromCsv {
      fi
      munki_host_display_name="${host_display_name}" ## set the computerManifest filename
 
-     host_extraManifests="${csv_nestedManifests}" ; cmd_echoDebug "csv_nestedManifests: ${csv_nestedManifests}"
+     host_extraManifests="${csv_nestedManifests}" ; echo_Debug "csv_nestedManifests: ${csv_nestedManifests}"
 
      ## are hosts Manifests in a sub dir on munki_Repo ?
      if [[ ! "${MunkiRepoHostSubDir}" ]] ; then
@@ -256,15 +264,15 @@ function ComputeHostIncludedManifests {
  OLDIFS2="${IFS}"
  IFS="${csv_value_SEPARATOR}"
  for extra_manifest in "${host_extraManifests_array[@]}" ; do
-  cmd_echoDebug "extra_manifest: ${extra_manifest}"
+  echo_Debug "extra_manifest: ${extra_manifest}"
   host_manifests+=("${extra_manifest}")
  done
  IFS="${OLDIFS2}"
-  cmd_echoDebug " ------------------------------------------------------------------------"
+  echo_Debug " ------------------------------------------------------------------------"
  for host_manifest in "${host_manifests[@]}" ; do
-  cmd_echoDebug "host_manifest: ${host_manifest}"
+  echo_Debug "host_manifest: ${host_manifest}"
  done
-  cmd_echoDebug " ------------------------------------------------------------------------"
+  echo_Debug " ------------------------------------------------------------------------"
 }
 
 function GetBUJungleOptionsFromCSV {
@@ -276,14 +284,14 @@ function GetBUJungleOptionsFromCSV {
  while read csv_BU csv_munkiReportURL csv_SalURL csv_HelpURL csv_ASUSURL
   do
    if [[ "${csv_BU}" == "${host_BUMaster}" ]] ; then ## verify host SerialNumber of host is in the csv file
-     cmd_echoDebug " ------------------------------------------------------------------------"
-     jungle_BUMatch="1" ; cmd_echoDebug "jungle_BUMatch" ; cmd_echoDebug
-     jungle_BU="${csv_BU}" ; cmd_echoDebug "csv_BU: ${csv_BU}" ## this is the Business Unit
-     jungle_munkiReportURL="${csv_munkiReportURL}" ; cmd_echoDebug "csv_munkiReportURL: ${csv_munkiReportURL}" ## this is munkireport URL
-     jungle_SalURL="${csv_SalURL}" ; cmd_echoDebug "csv_SalURL: ${csv_SalURL}" ## this is SAL URL
-     jungle_HelpURL="${csv_HelpURL}" ; cmd_echoDebug "csv_HelpURL: ${csv_HelpURL}" ## this is Munki's Help URL
-     jungle_ASUSURL="${csv_ASUSURL}" ; cmd_echoDebug "csv_ASUSURL: ${csv_ASUSURL}"## this is Apple Software Update URL
-     cmd_echoDebug " ------------------------------------------------------------------------"
+     echo_Debug " ------------------------------------------------------------------------"
+     jungle_BUMatch="1" ; echo_Debug "jungle_BUMatch" ; echo_Debug
+     jungle_BU="${csv_BU}" ; echo_Debug "csv_BU: ${csv_BU}" ## this is the Business Unit
+     jungle_munkiReportURL="${csv_munkiReportURL}" ; echo_Debug "csv_munkiReportURL: ${csv_munkiReportURL}" ## this is munkireport URL
+     jungle_SalURL="${csv_SalURL}" ; echo_Debug "csv_SalURL: ${csv_SalURL}" ## this is SAL URL
+     jungle_HelpURL="${csv_HelpURL}" ; echo_Debug "csv_HelpURL: ${csv_HelpURL}" ## this is Munki's Help URL
+     jungle_ASUSURL="${csv_ASUSURL}" ; echo_Debug "csv_ASUSURL: ${csv_ASUSURL}"## this is Apple Software Update URL
+     echo_Debug " ------------------------------------------------------------------------"
    fi
   done < "${WorkingDirectory}/${BU_Jungle_Options_FileName}" #ok
 
@@ -300,12 +308,12 @@ function GetSalKey {
  OLDIFS=$IFS
  IFS="${csv_field_SEPARATOR}"
  echo " ------------------------------------------------------------------------"
-  cmd_echoDebug " - Reading sal keys csv file..."
+  echo_Debug " - Reading sal keys csv file..."
  while read csv_BU_id csv_GP_id csv_BU_key
   do
    if [[ "${csv_BU_id}" == "${host_BUMaster}" ]] && [[ "${csv_GP_id}" == "${host_GPMaster}" ]] ; then
     SalkeyMatch="1"
-    host_Sal_Key="${csv_BU_key}" ; cmd_echoDebug "host_Sal_Key: ${host_Sal_Key}"
+    host_Sal_Key="${csv_BU_key}" ; echo_Debug "host_Sal_Key: ${host_Sal_Key}"
    fi
   done < "${WorkingDirectory}/${BU_SalKeys_FileName}"
   if [[ "$SalkeyMatch" != "1" ]] ; then
@@ -319,12 +327,12 @@ function GetMRKey {
  OLDIFS=$IFS
  IFS="${csv_field_SEPARATOR}"
  echo " ------------------------------------------------------------------------"
-  cmd_echoDebug " - Reading MunkiReport keys csv file..."
+  echo_Debug " - Reading MunkiReport keys csv file..."
  while read csv_BU_id csv_GP_id csv_BU_key
   do
    if [[ "${csv_BU_id}" == "${host_BUMaster}" ]] && [[ "${csv_GP_id}" == "${host_GPMaster}" ]] ; then
     MRkeyMatch="1"
-    host_MR_Key="${csv_BU_key}" ; cmd_echoDebug "host_MR_Key: ${host_MR_Key}"
+    host_MR_Key="${csv_BU_key}" ; echo_Debug "host_MR_Key: ${host_MR_Key}"
    fi
   done < "${WorkingDirectory}/${BU_MRKeys_FileName}"
   if [[ "$MRkeyMatch" != "1" ]] ; then
@@ -457,15 +465,15 @@ function WriteHostConfig {
  SetHostMunkiPrefs
  munki_bootstap ## Maybe not a good idea in THIS script
  if [[ -n "${jungle_munkiReportURL}" ]] ; then
-   cmd_echoDebug " --- munkireport URL"
+   echo_Debug " --- munkireport URL"
   SetHostMunkiReportsPrefs
  fi
  if [[ -n "${jungle_SalURL}" ]] ; then
-   cmd_echoDebug " --- SAL URL"
+   echo_Debug " --- SAL URL"
   SetHostSalPrefs
  fi
  if [[ -n "${jungle_ASUSURL}" ]] ; then
-   cmd_echoDebug " --- ASUS URL"
+   echo_Debug " --- ASUS URL"
   SetHostAppleSoftwareUpdateURLPrefs
  fi
  ##let's set AppleSetupDone
@@ -517,16 +525,16 @@ function WriteHostManifest {
  display_name_StringCheck=$( CmdPlistBuddyCheckString "${munki_host_manifest}" "display_name" )
  if [[ "${display_name_StringCheck}" == "" ]] ; then
     echo " Display_name not set, writing it"
-     cmd_echoDebug "display_name_StringCheck ${display_name_StringCheck}" ; cmd_echoDebug "host_display_name ${host_display_name}"
+     echo_Debug "display_name_StringCheck ${display_name_StringCheck}" ; echo_Debug "host_display_name ${host_display_name}"
     CmdPlistBuddyAddString "${munki_host_manifest}" "display_name" "${host_display_name}"
  elif [[ "${display_name_StringCheck}" != "${host_display_name}" ]] ; then
     echo " Changing display_name to ${host_display_name}"
-     cmd_echoDebug "display_name_StringCheck ${display_name_StringCheck}" ; cmd_echoDebug "host_display_name ${host_display_name}"
+     echo_Debug "display_name_StringCheck ${display_name_StringCheck}" ; echo_Debug "host_display_name ${host_display_name}"
     CmdPlistBuddyDeleteString "${munki_host_manifest}" "display_name"
     CmdPlistBuddyAddString "${munki_host_manifest}" "display_name" "${host_display_name}"
  elif [[ "${display_name_StringCheck}" == "${host_display_name}" ]] ; then
     echo " Display_name ${host_Id} is set, skipping"
-     cmd_echoDebug "display_name_StringCheck ${display_name_StringCheck}" ; cmd_echoDebug "host_display_name ${host_display_name}"
+     echo_Debug "display_name_StringCheck ${display_name_StringCheck}" ; echo_Debug "host_display_name ${host_display_name}"
  fi
 }
 
@@ -557,12 +565,11 @@ function CleanUp {
  rm -Rf "${WorkingDirectory}"
 }
 
-function cmd_echoDebug {
+function echo_Debug {
  if [[ "${echoDebug}" == 1 ]] ; then
   "${cmd_echo}" "${1}"
  fi
 }
-
 
 function EndIt {
  ## Source : https://technology.siprep.org/deploying-munki-with-mosyle-mdm/
@@ -573,11 +580,64 @@ function EndIt {
  done
 
  ## Now that setup assistant is done, reboot the machine, since Munki requires a reboot after installation
- /sbin/shutdown -r now
+ if [[ "${reboot_after_enroll}" == 1 ]]; then
+  sleep 10
+  echo "rebooting now"
+  /sbin/shutdown -r now
+ fi
 }
 
+################################ Cloudflare Warp CHECK ######################################
+# Warp must be running for munki to be reacheable
+
+function warp_App_Installation {
+ if system_profiler SPApplicationsDataType | grep -iq "${app_Name}" ; then
+  #echo_Debug " ${app_Name} is installed"
+  App_installed="OK"
+ else
+  echo " ${app_Name} is Not installed"
+ fi
+}
+
+function warp_UrlsAvailability {
+ team_url_check=$( UrlCheck "${cf_team_URL}" )
+ if [[ "${team_url_check}" == "200" ]] ; then
+  #echo_Debug " Team URL: ${cf_team_Name} is reachable"
+  team_url_access="OK"
+ else
+  echo " Team URL: ${cf_team_Name} is NOT reachable"
+ fi
+}
+
+function check_warp_status() {
+ if "${cmd_warpcli}" status | grep -iq "Success" ; then
+  #echo_Debug " Warp Status is Connected"
+  warp_status="OK"
+ else
+  echo " Warp Status is Disconnected"
+ fi
+}
+
+function Cloudflare_Checked {
+ if [[ "${check_for_cloudflare}" == 1 ]] ; then
+  echo "Warp check requested"
+  warp_App_Installation
+  warp_UrlsAvailability
+  check_warp_status
+  if [[ "${App_installed}" == "OK" ]] && [[ "${team_url_access}" == "OK" ]] && [[ "${warp_status}" == "OK" ]] ; then
+   echo " Warp Setup OK, Continuing to enroll in munki"
+  else
+   echo " Warp Setup KO, Can't continue to munki enrolment"
+   exit 1
+  fi
+ fi
+}
+
+#############################################################################################
+
 function DoIt {
- UrlsAvailability
+ Cloudflare_Checked
+ munki_UrlsAvailability
  PrepareWorkingDirectory
  GetCsvFiles
  GetComputerInfoFromCsv
@@ -595,6 +655,7 @@ DoIt
 exit 0
 
 ######################################## TODOS ##############################################
+## Check Warp Status before running. DONE
 ## Options yes or no SAL aka if no CSV don't fail
 ## Options reboot or not selon postinstll par ex.
 ## Put munki_bootstrap & reset_manifest Options in BU_Munki_Hosts.csv file. TODO
