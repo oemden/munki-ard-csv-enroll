@@ -4,10 +4,10 @@
 ##
 ## oem at oemden dot com
 ##
-version="1.5.7.3" ## Option to get csv files fom USB key
+version="1.6" ## avoid empty manifest variable ; adapt curl output for https
 ############################# EDIT START ####################################################
 ## ---------------------------- Jungle Options  -------------------------------------- #
-host_Id_Choice="CN" # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's Manifest in Munki
+host_Id_Choice="SN" # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's Manifest in Munki
 host_display_name_Choice="CN" ##  # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's display_name Manifest in Munki
 BU_ARD_Choice="ARD1" # Used to match Sal key ! if empty sal will not be configured
 GP_ARD_Choice="ARD2" # Used to match Sal key ! if empty sal will not be configured
@@ -98,17 +98,17 @@ cmd_cp="/bin/cp"
 #################################### prepare stuff ##########################################
 function UrlCheck() {
  # check url is reachable
-  "${cmd_curl}" -H "${AUTH}" -Is "${1}" | head -n 1 | awk '{print $3}' | grep "OK"
+  "${cmd_curl}" -o /dev/null -H "${AUTH}" -sw "%{http_code}" "${1}" | grep '^[0-9]\+'
 }
 
 function UrlsAvailability {
  echo " ------------------------------------------------------------------------"
  ## is munki_repo reachable ?
  munki_url_check=$( UrlCheck "${MUNKI_REPO_URL}" )
- if [[ "${munki_url_check}" =~ "OK" ]] ; then
+ if [[ "${munki_url_check}" =~ "200" ]] ; then
   printf " munki Repo URL: ${MUNKI_REPO_URL} is reachable, \n checking munki enroll URL\n"
    munkienroll_url_check=$( UrlCheck "${MUNKI_ENROLL_URL}" )
-    if [[ "${munkienroll_url_check}" =~ "OK" ]] ; then
+    if [[ "${munkienroll_url_check}" =~ "200" ]] ; then
      echo " munki ENROLL URL ${MUNKI_ENROLL_URL} is reachable, we can go on"
     else
      echo " munki ENROLL URL is NOT reachable"
@@ -500,14 +500,17 @@ function WriteHostManifest {
 
  ## Adding included_manifests (Array)
  for manifest in "${host_manifests[@]}" ; do
-    included_manifests_ArrayCheck=$( CmdPlistBuddyCheckArray "${munki_host_manifest}" "included_manifests" "${manifest}" )
-    for included_manifest_Checked in "${included_manifests_ArrayCheck[@]}" ; do
-     if [[ "${included_manifest_Checked}" == "${manifest}" ]] ; then
-      echo "included_manifest ${manifest} already set, skipping"
-     else
-      CmdPlistBuddyAddArray "${munki_host_manifest}" "included_manifests" "${manifest}"
-     fi
-    done
+ 	# check if the manifest variable is not empty
+ 	if [[ "${manifest}" != "" ]] ; then
+     included_manifests_ArrayCheck=$( CmdPlistBuddyCheckArray "${munki_host_manifest}" "included_manifests" "${manifest}" )
+     for included_manifest_Checked in "${included_manifests_ArrayCheck[@]}" ; do
+      if [[ "${included_manifest_Checked}" == "${manifest}" ]] ; then
+       echo "included_manifest ${manifest} already set, skipping"
+      else
+       CmdPlistBuddyAddArray "${munki_host_manifest}" "included_manifests" "${manifest}"
+      fi
+     done
+    fi
  done
 
  ## Adding display_name (string)

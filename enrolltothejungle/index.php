@@ -1,9 +1,8 @@
 <?PHP
 error_reporting (E_ALL ^ E_NOTICE);
-// Version=1.2.2
-// remove for php8++
-//  $hostdir = $_POST['hostdir'];
-//  $version = $_POST['version'];
+// Version=1.6
+  $hostdir = $_POST['hostdir'];
+  $version = $_POST['version'];
   if(!empty($_FILES['uploaded_file']))
   {
    echo  PHP_EOL . "Enroll To The Jungle - version: " . $version . PHP_EOL ;
