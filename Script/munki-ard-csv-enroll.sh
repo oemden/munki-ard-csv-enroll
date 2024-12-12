@@ -5,7 +5,7 @@
 ##
 ## oem at oemden dot com
 ##
-version="1.7" ## Adding Cloudflare Check
+version="1.7.1" ## Modifications in Cloudflare Check
 ############################# EDIT START ####################################################
 ## ---------------------------- Jungle Options  -------------------------------------- #
 host_Id_Choice="SN" # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's Manifest in Munki
@@ -591,7 +591,8 @@ function EndIt {
 # Warp must be running for munki to be reacheable
 
 function warp_App_Installation {
- if system_profiler SPApplicationsDataType | grep -iq "${app_Name}" ; then
+# if system_profiler SPApplicationsDataType | grep -iq "${app_Name}" ; then
+ if system_profiler SPApplicationsDataType | grep -i "${app_Name}" ; then
   #echo_Debug " ${app_Name} is installed"
   App_installed="OK"
  else
@@ -610,7 +611,8 @@ function warp_UrlsAvailability {
 }
 
 function check_warp_status() {
- if "${cmd_warpcli}" status | grep -iq "Success" ; then
+ #if "${cmd_warpcli}" status | grep -iq "Success" ; then
+ if "${cmd_warpcli}" status | grep -i "Connected" ; then
   #echo_Debug " Warp Status is Connected"
   warp_status="OK"
  else
