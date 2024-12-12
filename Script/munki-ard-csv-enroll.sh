@@ -5,7 +5,7 @@
 ##
 ## oem at oemden dot com
 ##
-version="1.7.1" ## Modifications in Cloudflare Check
+version="1.8.1" ## Modifications for Cloudflare Check/ new empty file "check" in munki root dir. - renamed enroll file: index.php  to enroll.php
 ############################# EDIT START ####################################################
 ## ---------------------------- Jungle Options  -------------------------------------- #
 host_Id_Choice="SN" # SN ( Serial Number ) | MAC ( Mac Address ) | CN ( ComputerName ) ## the Name of the host's Manifest in Munki
@@ -45,7 +45,7 @@ echoDebug=0 # print extra feedback if set on 1. low feedback if set to 0
 
 MUNKI_ENROLL_DIR="${MUNKI_REPO_URL}/enrolltothejungle" ## Please Do Read ReadMe file
 #MUNKI_ENROLL_CSVDIR="${MUNKI_REPO_URL}/enrolltothejungle/csv" ## TODO
-MUNKI_ENROLL_URL="${MUNKI_ENROLL_DIR}/index.php" ## Please Do Read ReadMe file
+MUNKI_ENROLL_URL="${MUNKI_ENROLL_DIR}/enroll.php" ## Please Do Read ReadMe file
 Host_UNIQUE_ID=`ioreg -l | grep IOPlatformSerialNumber | awk '{print $4}' | cut -d \" -f 2` ## for CSV match
 
 ####################################### Welcome ############################################
@@ -112,7 +112,8 @@ function UrlCheck() {
 function munki_UrlsAvailability {
  echo " ------------------------------------------------------------------------"
  ## is munki_repo reachable ?
- munki_url_check=$( UrlCheck "${MUNKI_REPO_URL}" )
+ ## requires an empty file 'check' in munki_repo root_dir
+ munki_url_check=$( UrlCheck "${MUNKI_REPO_URL}/check" )
  if [[ "${munki_url_check}" =~ "200" ]] ; then
   printf " munki Repo URL: ${MUNKI_REPO_URL} is reachable, \n checking munki enroll URL\n"
    munkienroll_url_check=$( UrlCheck "${MUNKI_ENROLL_URL}" )

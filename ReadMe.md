@@ -13,6 +13,21 @@ It can be runned from ( the munki) bootstrappr as a script, as a postinstall scr
 
 Added Cloudflare Option in case your munki_repo fqdn is managed  CF Zero Trust )
 
+my munki repo now runs in a Docker Container with nginx.
+I have tighten nginx settings, so that in only allows `managedsoftwareupdate` update and `curl`.
+
+
+```
+	# Check for valid Munki client user agents and curl
+	if ($http_user_agent !~* "Darwin.*MachineConfiguration|managedsoftwareupdate|curl") {
+    return 403;
+    }
+```
+It means some Modifications in munki_repo and the script:
+
+- Renamed `munki_repo/enrolltothejungle/index.php` to `munki_repo/enrolltothejungle/enroll.php`
+- Added an empty file `munki_repo/check` for the url check. Because of the new nginx settings a file is needed for curl, otherwise it fails ( return a `404` instead of `202` answer )
+
 #### 2021 update: 
 
 I use this script for quite some time now ( 2019 ) and it works as expected
